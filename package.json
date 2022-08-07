@@ -1,0 +1,10 @@
+{
+  "name": "flow-typed-pr-bot",
+  "private": true,
+  "dependencies": {
+    "koa": "^2.13.4"
+  },
+  "devDependencies": {
+    "flow-typed": "^3.8.0"
+  }
+}
