@@ -2,7 +2,9 @@
 const Router = require('koa-router');
 
 module.exports = (router: Router) => {
-  router.get('/pull-request', () => {
+  router.get('/pull-request', (ctx) => {
+    // const {} = ctx.request.body;
 
+    ctx.body = 'test';
   });
 };
