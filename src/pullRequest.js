@@ -16,6 +16,9 @@ const repoRequestBase = {
 
 module.exports = (router: Router) => {
   router.get('/pull-request/:prId', async (ctx) => {
+    // TODO: check if header token passed doesn't match
+    // if so return error
+
     const { prId } = ctx.params;
 
     if (!prId) {
