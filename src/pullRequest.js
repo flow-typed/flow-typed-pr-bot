@@ -4,10 +4,14 @@ import type { PullRequestFilesT } from './types';
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
 
+const readCodeowners = require('./readCodeowners');
+
 const repoRequestBase = {
-  owner: 'flow-typed',
+  // owner: 'flow-typed',
+  owner: 'brianzchen',
   repo: 'flow-typed',
-  branch: 'main',
+  // ref: 'main',
+  ref: 'codeowners',
 };
 
 module.exports = (router: Router) => {
@@ -27,8 +31,9 @@ module.exports = (router: Router) => {
       pull_number: prId,
     });
 
-    const codeowners = [];
-    data.map(async (o) => {
+    // const codeowners = [];
+
+    await Promise.all(data.map(async (o) => {
       const { filename } = o;
 
       const definitionPathStart = 'definitions/npm/';
@@ -39,33 +44,52 @@ module.exports = (router: Router) => {
         // If it's inside a scope
         if (definitionPath.startsWith('@')) {
           const scopePath = definitionPath.substring(0, definitionPath.indexOf('/') + 1);
-          console.log(scopePath);
 
+          // Search for CODEOWNERS in scope
           try {
             const scopeCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
               path: `${definitionPathStart}${scopePath}CODEOWNERS`,
             });
-            console.log(scopeCodeowners);
+            await readCodeowners(scopeCodeowners);
+          } catch (e) {
+            //
+          }
 
-            // scoped lib path
+          // Search for CODEOWNERS in scope library
+          try {
+            console.log(definitionPath);
+            const libPath = definitionPath.substring(
+              definitionPath.indexOf(scopePath) + scopePath.length,
+            );
+            console.log('testy', libPath);
+            const lib = libPath.substring(0, libPath.indexOf('/') + 1);
+            console.log('test', `${definitionPathStart}${scopePath}${lib}CODEOWNERS`);
+            const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+              ...repoRequestBase,
+              path: `${definitionPathStart}${scopePath}${lib}CODEOWNERS`,
+            });
+            await readCodeowners(defCodeowners);
           } catch (e) {
             //
           }
         } else {
+          // Search for CODEOWNERS in library
           try {
             const lib = definitionPath.substring(0, definitionPath.indexOf('/') + 1);
             const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
               path: `${definitionPathStart}${lib}CODEOWNERS`,
             });
-            console.log(defCodeowners);
+            await readCodeowners(defCodeowners);
           } catch (e) {
             //
           }
         }
       }
-    });
+    }));
+
+    console.log('done');
 
     ctx.body = 'Ok';
   });
