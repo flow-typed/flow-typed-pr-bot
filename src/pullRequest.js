@@ -4,29 +4,31 @@ import type { PullRequestFilesT } from './types';
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
 
+const { DEFINITION_START_PATH } = require('./constants');
+const formatMessage = require('./formatMessage');
 const readCodeowners = require('./readCodeowners');
 
 const repoRequestBase = {
-  // owner: 'flow-typed',
-  owner: 'brianzchen',
+  owner: 'flow-typed',
   repo: 'flow-typed',
-  // ref: 'main',
-  ref: 'codeowners',
+  ref: 'main',
 };
 
 module.exports = (router: Router) => {
   router.get('/pull-request/:prId', async (ctx) => {
-    // TODO: check if header token passed doesn't match
-    // if so return error
-
     const { prId } = ctx.params;
 
-    if (!prId) {
-      // TODO: return error
+    const { MATCH_SECRET, GITHUB_TOKEN } = process.env;
+
+    if (MATCH_SECRET && MATCH_SECRET !== ctx.request.query.secret) {
+      // return invalid request error
+      ctx.status = 401;
+      ctx.body = 'Invalid secret';
+      return;
     }
 
     const octokit = new Octokit({
-      auth: process.env.GITHUB_TOKEN,
+      auth: GITHUB_TOKEN,
     });
 
     const { data }: PullRequestFilesT = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
@@ -39,10 +41,8 @@ module.exports = (router: Router) => {
     await Promise.all(data.map(async (o) => {
       const { filename } = o;
 
-      const definitionPathStart = 'definitions/npm/';
-
-      if (filename.startsWith(definitionPathStart)) {
-        const definitionPath = filename.substring(definitionPathStart.length);
+      if (filename.startsWith(DEFINITION_START_PATH)) {
+        const definitionPath = filename.substring(DEFINITION_START_PATH.length);
 
         // If it's inside a scope
         if (definitionPath.startsWith('@')) {
@@ -50,7 +50,7 @@ module.exports = (router: Router) => {
 
           // Search for CODEOWNERS in scope
           try {
-            const path = `${definitionPathStart}${scopePath}`;
+            const path = `${DEFINITION_START_PATH}${scopePath}`;
             const scopeCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
               path: `${path}CODEOWNERS`,
@@ -67,7 +67,7 @@ module.exports = (router: Router) => {
                 definitionPath.indexOf(scopePath) + scopePath.length,
               );
               const lib = libPath.substring(0, libPath.indexOf('/') + 1);
-              const path = `${definitionPathStart}${scopePath}${lib}`;
+              const path = `${DEFINITION_START_PATH}${scopePath}${lib}`;
               const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
                 ...repoRequestBase,
                 path: `${path}CODEOWNERS`,
@@ -81,7 +81,7 @@ module.exports = (router: Router) => {
           // Search for CODEOWNERS in library
           try {
             const lib = definitionPath.substring(0, definitionPath.indexOf('/') + 1);
-            const path = `${definitionPathStart}${lib}`;
+            const path = `${DEFINITION_START_PATH}${lib}`;
             const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
               path: `${path}CODEOWNERS`,
@@ -94,8 +94,17 @@ module.exports = (router: Router) => {
       }
     }));
 
-    // TODO: format and then use pr comment api
-    console.log('codeowners matched', codeowners);
+    if (codeowners.length === 0) {
+      ctx.body = 'Ok';
+      return;
+    }
+
+    console.info('Matches', codeowners);
+    await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+      ...repoRequestBase,
+      issue_number: prId,
+      body: formatMessage(codeowners),
+    });
 
     ctx.body = 'Ok';
   });
