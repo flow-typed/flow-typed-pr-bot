@@ -4,3 +4,10 @@ export type PullRequestFilesT = {
     filename: string,
   }>,
 };
+
+export type ContentFileT = {
+  data: {
+    name: string,
+    download_url: string,
+  },
+};

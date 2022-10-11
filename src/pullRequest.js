@@ -19,7 +19,7 @@ module.exports = (router: Router) => {
     const { prId } = ctx.params;
 
     if (!prId) {
-      // return error
+      // TODO: return error
     }
 
     const octokit = new Octokit({
@@ -31,7 +31,7 @@ module.exports = (router: Router) => {
       pull_number: prId,
     });
 
-    // const codeowners = [];
+    const codeowners = [];
 
     await Promise.all(data.map(async (o) => {
       const { filename } = o;
@@ -47,41 +47,43 @@ module.exports = (router: Router) => {
 
           // Search for CODEOWNERS in scope
           try {
+            const path = `${definitionPathStart}${scopePath}`;
             const scopeCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
-              path: `${definitionPathStart}${scopePath}CODEOWNERS`,
+              path: `${path}CODEOWNERS`,
             });
-            await readCodeowners(scopeCodeowners);
+            await readCodeowners(path, scopeCodeowners, codeowners);
           } catch (e) {
             //
           }
 
           // Search for CODEOWNERS in scope library
-          try {
-            console.log(definitionPath);
-            const libPath = definitionPath.substring(
-              definitionPath.indexOf(scopePath) + scopePath.length,
-            );
-            console.log('testy', libPath);
-            const lib = libPath.substring(0, libPath.indexOf('/') + 1);
-            console.log('test', `${definitionPathStart}${scopePath}${lib}CODEOWNERS`);
-            const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-              ...repoRequestBase,
-              path: `${definitionPathStart}${scopePath}${lib}CODEOWNERS`,
-            });
-            await readCodeowners(defCodeowners);
-          } catch (e) {
-            //
+          if (definitionPath.substring(definitionPath.indexOf(scopePath)).split('/').length > 2) {
+            try {
+              const libPath = definitionPath.substring(
+                definitionPath.indexOf(scopePath) + scopePath.length,
+              );
+              const lib = libPath.substring(0, libPath.indexOf('/') + 1);
+              const path = `${definitionPathStart}${scopePath}${lib}`;
+              const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+                ...repoRequestBase,
+                path: `${path}CODEOWNERS`,
+              });
+              await readCodeowners(path, defCodeowners, codeowners);
+            } catch (e) {
+              //
+            }
           }
         } else {
           // Search for CODEOWNERS in library
           try {
             const lib = definitionPath.substring(0, definitionPath.indexOf('/') + 1);
+            const path = `${definitionPathStart}${lib}`;
             const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
               ...repoRequestBase,
-              path: `${definitionPathStart}${lib}CODEOWNERS`,
+              path: `${path}CODEOWNERS`,
             });
-            await readCodeowners(defCodeowners);
+            await readCodeowners(path, defCodeowners, codeowners);
           } catch (e) {
             //
           }
@@ -89,7 +91,8 @@ module.exports = (router: Router) => {
       }
     }));
 
-    console.log('done');
+    // TODO: format and then use pr comment api
+    console.log('codeowners matched', codeowners);
 
     ctx.body = 'Ok';
   });
