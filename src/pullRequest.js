@@ -1,10 +1,10 @@
 // @flow
-import type { PullRequestFilesT } from './types';
+import type { PullRequestFilesT, IssueCommentsT } from './types';
 
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
 
-const { DEFINITION_START_PATH } = require('./constants');
+const { DEFINITION_START_PATH, COMMENT_HEADER } = require('./constants');
 const formatMessage = require('./formatMessage');
 const readCodeowners = require('./readCodeowners');
 
@@ -15,6 +15,10 @@ const repoRequestBase = {
 };
 
 module.exports = (router: Router) => {
+  router.get('/health', (ctx) => {
+    ctx.body = 'Ok';
+  });
+
   router.get('/pull-request/:prId', async (ctx) => {
     const { prId } = ctx.params;
 
@@ -99,12 +103,33 @@ module.exports = (router: Router) => {
       return;
     }
 
-    console.info('Matches', codeowners);
-    await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+    const comments: IssueCommentsT = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/comments', {
       ...repoRequestBase,
       issue_number: prId,
-      body: formatMessage(codeowners),
     });
+    const codeReviewComment = comments.data.find((o) => o.body.startsWith(COMMENT_HEADER));
+
+    console.info(`pull request #${prId} matches`, codeowners);
+    const commentBody = formatMessage(codeowners);
+    if (codeReviewComment) {
+      if (codeReviewComment.body !== commentBody) {
+        await octokit.request('PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}', {
+          ...repoRequestBase,
+          comment_id: codeReviewComment.id,
+          body: commentBody,
+        });
+        console.info(`pull request #${prId} has been updated`);
+      } else {
+        console.info(`pull request #${prId} has comment and does not need updating`);
+      }
+    } else {
+      await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+        ...repoRequestBase,
+        issue_number: prId,
+        body: formatMessage(codeowners),
+      });
+      console.info(`pull request #${prId} has been set`);
+    }
 
     ctx.body = 'Ok';
   });
