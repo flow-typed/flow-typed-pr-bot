@@ -4,7 +4,8 @@
   "scripts": {
     "clean": "rm -rf dist",
     "start": "yarn clean && babel src --out-dir dist && concurrently \"babel src --out-dir dist -w\" \"nodemon ./dist/index.js\"",
-    "build": "yarn clean && babel src --out-dir dist"
+    "build": "yarn clean && babel src --out-dir dist",
+    "start:prod": "node ./dist/index.js"
   },
   "dependencies": {
     "@koa/cors": "^3.3.0",
