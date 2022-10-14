@@ -1,4 +1,12 @@
 // @flow
+export type PullRequestT = {
+  data: {
+    user: {
+      login: string,
+    },
+  },
+};
+
 export type PullRequestFilesT = {
   data: Array<{
     filename: string,

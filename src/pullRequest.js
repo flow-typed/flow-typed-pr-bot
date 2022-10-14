@@ -1,5 +1,5 @@
 // @flow
-import type { PullRequestFilesT, IssueCommentsT } from './types';
+import type { PullRequestT, PullRequestFilesT, IssueCommentsT } from './types';
 
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
@@ -35,14 +35,22 @@ module.exports = (router: Router) => {
       auth: GITHUB_TOKEN,
     });
 
-    const { data }: PullRequestFilesT = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
-      ...repoRequestBase,
-      pull_number: prId,
-    });
+    const [prData, changedFiles]: [PullRequestT, PullRequestFilesT] = await Promise.all([
+      (await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+        ...repoRequestBase,
+        pull_number: prId,
+      })),
+      (await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+        ...repoRequestBase,
+        pull_number: prId,
+      })),
+    ]);
+
+    const author = prData.data.user.login;
 
     const codeowners = [];
 
-    await Promise.all(data.map(async (o) => {
+    await Promise.all(changedFiles.data.map(async (o) => {
       const { filename } = o;
 
       if (filename.startsWith(DEFINITION_START_PATH)) {
@@ -110,7 +118,7 @@ module.exports = (router: Router) => {
     const codeReviewComment = comments.data.find((o) => o.body.startsWith(COMMENT_HEADER));
 
     console.info(`pull request #${prId} matches`, codeowners);
-    const commentBody = formatMessage(codeowners);
+    const commentBody = formatMessage(codeowners, author);
     if (codeReviewComment) {
       if (codeReviewComment.body !== commentBody) {
         await octokit.request('PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}', {
@@ -126,7 +134,7 @@ module.exports = (router: Router) => {
       await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
         ...repoRequestBase,
         issue_number: prId,
-        body: formatMessage(codeowners),
+        body: formatMessage(codeowners, author),
       });
       console.info(`pull request #${prId} has been set`);
     }
