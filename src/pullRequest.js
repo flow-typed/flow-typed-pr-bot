@@ -23,8 +23,9 @@ module.exports = (router: Router) => {
     const { prId } = ctx.params;
 
     const { MATCH_SECRET, GITHUB_TOKEN } = process.env;
+    const { secret } = ctx.request.query;
 
-    if (MATCH_SECRET && MATCH_SECRET !== ctx.request.query.secret) {
+    if (MATCH_SECRET && MATCH_SECRET !== secret) {
       // return invalid request error
       ctx.status = 401;
       ctx.body = 'Invalid secret';
@@ -49,9 +50,10 @@ module.exports = (router: Router) => {
     const author = prData.data.user.login;
 
     const codeowners = [];
+    // const qualitySuggestions = [];
 
     await Promise.all(changedFiles.data.map(async (o) => {
-      const { filename } = o;
+      const { filename, patch } = o;
 
       if (filename.startsWith(DEFINITION_START_PATH)) {
         const definitionPath = filename.substring(DEFINITION_START_PATH.length);
@@ -102,6 +104,20 @@ module.exports = (router: Router) => {
           } catch (e) {
             //
           }
+        }
+
+        // === Definition quality checks ===
+        const file = filename.substring(filename.lastIndexOf('/'));
+
+        if (file.endsWith('.js') && !file.startsWith('/test_')) {
+          const changedLines = patch.split('\n').filter((l) => l.startsWith('+'));
+
+          changedLines.forEach((l) => {
+            if (l.includes('any')) {
+              // also check if it's within a comment block
+              // otherwise we should just flag
+            }
+          });
         }
       }
     }));
