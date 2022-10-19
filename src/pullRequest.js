@@ -1,8 +1,14 @@
 // @flow
-import type { PullRequestT, PullRequestFilesT, IssueCommentsT } from './types';
+import type {
+  WebHookPayloadT,
+  PullRequestT,
+  PullRequestFilesT,
+  IssueCommentsT,
+} from './types';
 
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
+const { verifySecret } = require('verify-github-webhook-secret');
 
 const { DEFINITION_START_PATH, COMMENT_HEADER } = require('./constants');
 const formatMessage = require('./formatMessage');
@@ -19,16 +25,21 @@ module.exports = (router: Router) => {
     ctx.body = 'Ok';
   });
 
-  router.get('/pull-request/:prId', async (ctx) => {
-    const { prId } = ctx.params;
-
+  router.post('/pull-request', async (ctx) => {
     const { MATCH_SECRET, GITHUB_TOKEN } = process.env;
-    const { secret } = ctx.request.query;
 
-    if (MATCH_SECRET && MATCH_SECRET !== secret) {
+    if (MATCH_SECRET && !verifySecret(ctx.req, MATCH_SECRET)) {
       // return invalid request error
       ctx.status = 401;
       ctx.body = 'Invalid secret';
+      return;
+    }
+
+    const { action, pull_request }: WebHookPayloadT = (ctx.request.body: any);
+    const { id: prId } = pull_request;
+
+    if (!['opened', 'synchronize'].includes(action)) {
+      ctx.body = 'Ok';
       return;
     }
 
