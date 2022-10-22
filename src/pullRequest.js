@@ -8,7 +8,7 @@ import type {
 
 const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
-const { verifySecret } = require('verify-github-webhook-secret');
+const { createHmac } = require('crypto');
 
 const { DEFINITION_START_PATH, COMMENT_HEADER } = require('./constants');
 const formatMessage = require('./formatMessage');
@@ -28,15 +28,24 @@ module.exports = (router: Router) => {
   router.post('/pull-request', async (ctx) => {
     const { MATCH_SECRET, GITHUB_TOKEN } = process.env;
 
-    if (MATCH_SECRET && !verifySecret(ctx.req, MATCH_SECRET)) {
+    if (!MATCH_SECRET) {
+      // return invalid request error
+      ctx.status = 401;
+      ctx.body = 'Service missing secret';
+      return;
+    }
+
+    const hmac = createHmac('sha1', MATCH_SECRET);
+    const calculatedSignature = `sha1=${hmac.update(JSON.stringify(ctx.request.body)).digest('hex')}`;
+
+    if (ctx.req.headers['x-hub-signature'] !== calculatedSignature) {
       // return invalid request error
       ctx.status = 401;
       ctx.body = 'Invalid secret';
       return;
     }
 
-    const { action, pull_request }: WebHookPayloadT = (ctx.request.body: any);
-    const { id: prId } = pull_request;
+    const { action, number: prId }: WebHookPayloadT = (ctx.request.body: any);
 
     if (!['opened', 'synchronize'].includes(action)) {
       ctx.body = 'Ok';
