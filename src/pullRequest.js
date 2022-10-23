@@ -14,12 +14,6 @@ const { DEFINITION_START_PATH, COMMENT_HEADER } = require('./constants');
 const formatMessage = require('./formatMessage');
 const readCodeowners = require('./readCodeowners');
 
-const repoRequestBase = {
-  owner: 'flow-typed',
-  repo: 'flow-typed',
-  ref: 'main',
-};
-
 module.exports = (router: Router) => {
   router.get('/health', (ctx) => {
     ctx.body = 'Ok';
@@ -45,7 +39,7 @@ module.exports = (router: Router) => {
       return;
     }
 
-    const { action, number: prId }: WebHookPayloadT = (ctx.request.body: any);
+    const { action, number: prId, pull_request }: WebHookPayloadT = (ctx.request.body: any);
 
     if (!['opened', 'synchronize'].includes(action)) {
       ctx.body = 'Ok';
@@ -55,6 +49,14 @@ module.exports = (router: Router) => {
     const octokit = new Octokit({
       auth: GITHUB_TOKEN,
     });
+
+    const [owner, repo] = pull_request.base.repo.full_name;
+
+    const repoRequestBase = {
+      owner,
+      repo,
+      ref: 'main',
+    };
 
     const [prData, changedFiles]: [PullRequestT, PullRequestFilesT] = await Promise.all([
       (await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
