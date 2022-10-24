@@ -50,7 +50,7 @@ module.exports = (router: Router) => {
       auth: GITHUB_TOKEN,
     });
 
-    const [owner, repo] = pull_request.base.repo.full_name;
+    const [owner, repo] = pull_request.base.repo.full_name.split('/');
 
     const repoRequestBase = {
       owner,
