@@ -20,23 +20,25 @@ module.exports = (router: Router) => {
   });
 
   router.post('/pull-request', async (ctx) => {
-    const { MATCH_SECRET, GITHUB_TOKEN } = process.env;
+    const { MATCH_SECRET, GITHUB_TOKEN, DEV } = process.env;
 
-    if (!MATCH_SECRET) {
-      // return invalid request error
-      ctx.status = 401;
-      ctx.body = 'Service missing secret';
-      return;
-    }
+    if (!DEV) {
+      if (!MATCH_SECRET) {
+        // return invalid request error
+        ctx.status = 401;
+        ctx.body = 'Service missing secret';
+        return;
+      }
 
-    const hmac = createHmac('sha1', MATCH_SECRET);
-    const calculatedSignature = `sha1=${hmac.update(JSON.stringify(ctx.request.body)).digest('hex')}`;
+      const hmac = createHmac('sha1', MATCH_SECRET);
+      const calculatedSignature = `sha1=${hmac.update(JSON.stringify(ctx.request.body)).digest('hex')}`;
 
-    if (ctx.req.headers['x-hub-signature'] !== calculatedSignature) {
-      // return invalid request error
-      ctx.status = 401;
-      ctx.body = 'Invalid secret';
-      return;
+      if (ctx.req.headers['x-hub-signature'] !== calculatedSignature) {
+        // return invalid request error
+        ctx.status = 401;
+        ctx.body = 'Invalid secret';
+        return;
+      }
     }
 
     const { action, number: prId, pull_request }: WebHookPayloadT = (ctx.request.body: any);
