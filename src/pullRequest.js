@@ -10,7 +10,11 @@ const Router = require('koa-router');
 const { Octokit } = require('@octokit/rest');
 const { createHmac } = require('crypto');
 
-const { DEFINITION_START_PATH, COMMENT_HEADER } = require('./constants');
+const {
+  DEFINITION_START_PATH,
+  ENV_START_PATH,
+  COMMENT_HEADER,
+} = require('./constants');
 const formatMessage = require('./formatMessage');
 const readCodeowners = require('./readCodeowners');
 
@@ -142,6 +146,20 @@ module.exports = (router: Router) => {
               // otherwise we should just flag
             }
           });
+        }
+      } else if (filename.startsWith(ENV_START_PATH)) {
+        const envPath = filename.substring(ENV_START_PATH.length);
+
+        try {
+          const env = envPath.substring(0, envPath.indexOf('/') + 1);
+          const path = `${ENV_START_PATH}${env}`;
+          const defCodeowners = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+            ...repoRequestBase,
+            path: `${path}CODEOWNERS`,
+          });
+          await readCodeowners(path, defCodeowners, codeowners);
+        } catch (e) {
+          //
         }
       }
     }));
